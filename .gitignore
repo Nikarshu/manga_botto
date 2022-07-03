@@ -1,0 +1,16 @@
+## Cache
+__pycache__/
+alembic
+
+##PyCharm
+.idea/
+.vscode
+
+.env
+cache
+bot.session
+bot.session-journal
+/test.db
+
+venv
+env.json
