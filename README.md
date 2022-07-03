@@ -35,8 +35,3 @@ refresh - Reply to a PDF to refresh bot cache
 
 
 [![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy)
-
-## ᴅᴇᴘʟᴏʏ ᴏɴ ʀᴀɪʟᴡᴀʏ 🚄
-ꜰᴏʀ ᴅᴇᴘʟᴏʏ ᴏɴ ʀᴀɪʟᴡᴀʏ ᴍᴀᴋᴇ [Necessary Variables Here](https://github.com/Nikarshu/manga_botto), ᴜ ʜᴀᴠᴇ ᴛᴏ ꜰɪʟʟ.
-
-<p align="center"><a href="https://railway.app/new/template?template=https://github.com/Nikarshu/manga_botto&envs=BOT_TOKEN,API_ID,API_HASH,CHANNEL,CACHE_CHANNEL,"> <img src="https://img.shields.io/badge/Deploy%20To%20Railway-black?style=for-the-badge&logo=railway" width="220" height="38.45"/></a></p>
