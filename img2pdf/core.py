@@ -16,11 +16,7 @@ def fld2pdf(folder: Path, out: str):
     files.sort(key=lambda x: x.name)
     thumb_path = make_thumb(folder, files)
     pdf = folder / f'{out}.pdf'
-    try:
-        img2pdf(files, pdf)
-    except BaseException as e:
-        print(f'Image to pdf failed with exception: {e}')
-        old_img2pdf(files, pdf)
+    img2pdf(files, pdf)
     return pdf, thumb_path
 
 
@@ -38,33 +34,45 @@ def old_img2pdf(files: List[Path], out: Path):
         img.close()
 
 
-def pil_image(path: Path) -> BytesIO:
-    img = Image.open(path)
+def pil_image(path: Path) -> (BytesIO, int, int):
+    img = new_img(path)
+    width, height = img.width, img.height
     try:
         membuf = BytesIO()
-        if path.suffix == '.webp' or path.suffix == '.jpg':
-            img.save(membuf, format='jpeg')
-        else:
-            img.save(membuf)
+        img.save(membuf, format='JPEG')
     finally:
         img.close()
-    return membuf
+    return membuf, width, height
+
+
+def unicode_to_latin1(s):
+    # Substitute the ' character
+    s = s.replace('\u2019', '\x92')
+    # Substitute the " character
+    s = s.replace('\u201d', '\x94')
+    # Substitute the - character
+    s = s.replace('\u2013', '\x96')
+    # Substitute the ... character
+    s = s.replace('\u2026', '\x85')
+    # Substitute the ... character
+    s = s.replace('\u2014', '\x97')
+    # Substitute the ... character
+    s = s.replace('\u201c', '\x93')
+    return s
 
 
 def img2pdf(files: List[Path], out: Path):
     pdf = FPDF('P', 'pt')
     for imageFile in files:
-        width, height = get_image_size(imageFile)
+        img_bytes, width, height = pil_image(imageFile)
         
         pdf.add_page(format=(width, height))
-
-        img_bytes = pil_image(imageFile)
 
         pdf.image(img_bytes, 0, 0, width, height)
 
         img_bytes.close()
 
-    pdf.set_title(out.stem)
+    pdf.set_title(unicode_to_latin1(out.stem))
     pdf.output(out, "F")
     pdf.close()
 
@@ -77,10 +85,10 @@ def make_thumb(folder, files):
 
     thumbnail = Image.open(files[0]).convert('RGB')
     tg_max_size = (300, 300)
+    thumbnail = crop_thumb(thumbnail, aspect_ratio)
     thumbnail.thumbnail(tg_max_size)
     thumb_path = folder / 'thumbnail' / f'thumbnail.jpg'
     os.makedirs(thumb_path.parent, exist_ok=True)
-    thumbnail = crop_thumb(thumbnail, aspect_ratio)
     thumbnail.save(thumb_path)
     thumbnail.close()
     return thumb_path
@@ -90,5 +98,7 @@ def crop_thumb(thumb: Image.Image, aspect_ratio):
     w, h = thumb.width, thumb.height
     if w * 2 <= h:
         b = int(h - (w / aspect_ratio))
+        if b <= 0:
+            b = w
         thumb = thumb.crop((0, 0, w, b))
     return thumb
