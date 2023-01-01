@@ -2,7 +2,7 @@ import os
 from typing import Type, List, TypeVar
 
 from sqlalchemy.ext.asyncio import create_async_engine
-from sqlmodel import SQLModel, Field, Session, select
+from sqlmodel import SQLModel, Field, Session, select, delete
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from tools import LanguageSingleton
@@ -41,8 +41,7 @@ class MangaName(SQLModel, table=True):
 
 class DB(metaclass=LanguageSingleton):
     
-    def __init__(self):
-        dbname = os.getenv('DATABASE_URL_PRIMARY') or os.getenv('DATABASE_URL', 'sqlite:///test.db')
+    def __init__(self, dbname: str = 'sqlite:///test.db'):
         if dbname.startswith('postgres://'):
             dbname = dbname.replace('postgres://', 'postgresql+asyncpg://', 1)
         if dbname.startswith('sqlite'):
@@ -73,12 +72,20 @@ class DB(metaclass=LanguageSingleton):
             async with session.begin():
                 await session.delete(other)
 
-    async def get_chapter_file_by_id(self, file_id: str):
+    async def get_chapter_file_by_id(self, id: str):
         async with AsyncSession(self.engine) as session:  # type: AsyncSession
-            statement = select(ChapterFile).where(ChapterFile.file_unique_id == file_id)
+            statement = select(ChapterFile).where((ChapterFile.file_unique_id == id) |
+                                                  (ChapterFile.cbz_unique_id == id) |
+                                                  (ChapterFile.telegraph_url == id))
             return (await session.exec(statement=statement)).first()
 
     async def get_subs(self, user_id: str) -> List[MangaName]:
         async with AsyncSession(self.engine) as session:
             statement = select(MangaName).where(Subscription.user_id == user_id).where(Subscription.url == MangaName.url)
             return (await session.exec(statement=statement)).all()
+
+    async def erase_subs(self, user_id: str):
+        async with AsyncSession(self.engine) as session:
+            async with session.begin():
+                statement = delete(Subscription).where(Subscription.user_id == user_id)
+                await session.exec(statement=statement)
