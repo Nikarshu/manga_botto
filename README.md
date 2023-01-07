@@ -12,7 +12,8 @@ Read manga from your favourites websites on telegram.
 start - Usage Info
 subs - Your suscriptions
 refresh - Reply to a PDF to refresh bot cache
-
+options - Disable/enable pdf, cbz and/or telegraph output format
+help - Explain how to use the bot
 ```
 
 
@@ -28,7 +29,7 @@ refresh - Reply to a PDF to refresh bot cache
 
 `CHANNEL` - [Optional] Create a new channel (public), copy username wihtout t.me/
 
- - [Optional] Will be used as database url. If not given heroku database will be used instead. Get this value from [Elephantsql](https://elephantsql.com/)
+ `DATABASE_URL_PRIMARY` - [Optional] Will be used as database url. If not given heroku database will be used instead. Get this value from [Elephantsql](https://elephantsql.com/)
 
 
 ## Deploy
