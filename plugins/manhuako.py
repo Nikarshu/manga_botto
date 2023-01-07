@@ -7,31 +7,33 @@ from bs4.element import PageElement
 from plugins.client import MangaClient, MangaCard, MangaChapter, LastChapter
 
 
-class ManhuaKoClient(MangaClient):
+class ManhuaPlusClient(MangaClient):
 
-    base_url = urlparse("https://manhuako.com/")
-    search_url = urljoin(base_url.geturl(), "home/search")
-    search_param = 'mq'
+    base_url = urlparse("https://manhuaplus.com/")
+    search_url = base_url.geturl()
+    search_param = 's'
+    chapters = 'ajax/chapters/'
 
     pre_headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:97.0) Gecko/20100101 Firefox/97.0'
     }
 
-    def __init__(self, *args, name="Manhuako", **kwargs):
+    def __init__(self, *args, name="Manhuaplus", **kwargs):
         super().__init__(*args, name=name, headers=self.pre_headers, **kwargs)
 
     def mangas_from_page(self, page: bytes):
         bs = BeautifulSoup(page, "html.parser")
 
-        cards = bs.find_all("div", {"class": "card"})
+        cards = bs.find("div", {"class": "c-tabs-item"})
 
-        cards = [card for card in cards if card.findNext('p', {'class': 'type'}).text != "Novela"]
+        if not cards:
+            return []
 
-        mangas = [card.findNext('a', {'class': 'white-text'}) for card in cards]
-        names = [manga.string for manga in mangas]
-        url = [manga.get('href') for manga in mangas]
+        mangas = cards.find_all('div', {'class': 'tab-thumb'})
+        names = [manga.a.get('title') for manga in mangas]
+        url = [manga.a.get('href') for manga in mangas]
 
-        images = [card.findNext('img').get('src') for card in cards]
+        images = [manga.findNext('img').get('data-src') for manga in mangas]
 
         mangas = [MangaCard(self, *tup) for tup in zip(names, url, images)]
 
@@ -40,30 +42,28 @@ class ManhuaKoClient(MangaClient):
     def chapters_from_page(self, page: bytes, manga: MangaCard = None):
         bs = BeautifulSoup(page, "html.parser")
 
-        lis = bs.find_all("li", {"class": "collection-item"})
+        lis = bs.find_all("li", {"class": "wp-manga-chapter"})
 
         items = [li.findNext('a') for li in lis]
 
         links = [item.get('href') for item in items]
-        texts = [item.string for item in items]
+        texts = [item.string.strip() for item in items]
 
         return list(map(lambda x: MangaChapter(self, x[0], x[1], manga, []), zip(texts, links)))
 
-    @staticmethod
-    def updates_from_page(content):
-        bs = BeautifulSoup(content, "html.parser")
+    def updates_from_page(self, page: bytes):
+        bs = BeautifulSoup(page, "html.parser")
 
-        manga_items = bs.find_all("div", {"class": "card"})
+        manga_items: List[PageElement] = bs.find_all("div", {"class": "page-item-detail"})
 
         urls = dict()
 
         for manga_item in manga_items:
-            manga_url = manga_item.findNext('a', {'class': 'white-text'}).get('href')
 
-            if manga_url in urls:
-                continue
+            manga_url = manga_item.findNext('a').get('href')
 
-            chapter_url = manga_item.findNext('a', {'class': 'chip'}).get('href')
+            chapter_item = manga_item.findNext("div", {"class": "chapter-item"})
+            chapter_url = chapter_item.findNext("a").get('href')
 
             urls[manga_url] = chapter_url
 
@@ -72,7 +72,7 @@ class ManhuaKoClient(MangaClient):
     async def pictures_from_chapters(self, content: bytes, response=None):
         bs = BeautifulSoup(content, "html.parser")
 
-        ul = bs.find("div", {"id": "pantallaCompleta"})
+        ul = bs.find("div", {"class": "reading-content"})
 
         images = ul.find_all('img')
 
@@ -83,10 +83,10 @@ class ManhuaKoClient(MangaClient):
     async def search(self, query: str = "", page: int = 1) -> List[MangaCard]:
         query = quote_plus(query)
 
-        request_url = f'{self.search_url}/page/{page}'
+        request_url = self.search_url
 
         if query:
-            request_url += f'?{self.search_param}={query}'
+            request_url += f'?{self.search_param}={query}&post_type=wp-manga'
 
         content = await self.get_url(request_url)
 
@@ -94,21 +94,21 @@ class ManhuaKoClient(MangaClient):
 
     async def get_chapters(self, manga_card: MangaCard, page: int = 1) -> List[MangaChapter]:
 
-        request_url = f'{manga_card.url}/page/{page}'
+        request_url = f'{manga_card.url}{self.chapters}'
 
-        content = await self.get_url(request_url)
+        content = await self.get_url(request_url, method='post')
 
-        return self.chapters_from_page(content, manga_card)
+        return self.chapters_from_page(content, manga_card)[(page - 1) * 20:page * 20]
 
     async def iter_chapters(self, manga_url: str, manga_name) -> AsyncIterable[MangaChapter]:
-        manga = MangaCard(self, manga_name, manga_url, '')
-        page = 1
-        while page > 0:
-            chapters = await self.get_chapters(manga_card=manga, page=page)
-            if not chapters:
-                break
-            for chapter in chapters:
-                yield chapter
+        manga_card = MangaCard(self, manga_name, manga_url, '')
+
+        request_url = f'{manga_card.url}{self.chapters}'
+
+        content = await self.get_url(request_url, method='post')
+
+        for chapter in self.chapters_from_page(content, manga_card):
+            yield chapter
 
     async def contains_url(self, url: str):
         return url.startswith(self.base_url.geturl())
@@ -120,7 +120,6 @@ class ManhuaKoClient(MangaClient):
         updates = self.updates_from_page(content)
 
         updated = [lc.url for lc in last_chapters if updates.get(lc.url) and updates.get(lc.url) != lc.chapter_url]
-        not_updated = [lc.url for lc in last_chapters if
-                       not updates.get(lc.url) or updates.get(lc.url) == lc.chapter_url]
+        not_updated = [lc.url for lc in last_chapters if not updates.get(lc.url) or updates.get(lc.url) == lc.chapter_url]
 
         return updated, not_updated
